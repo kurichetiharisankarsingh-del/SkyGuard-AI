@@ -1,0 +1,15 @@
+node_modules/
+frontend/node_modules/
+backend/.venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/services/__pycache__/
+backend/tests/__pycache__/
+backend/skyguard.db
+frontend/dist/
+frontend/build.log
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+.DS_Store
+*.pyc
