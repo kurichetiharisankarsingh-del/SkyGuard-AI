@@ -306,8 +306,8 @@ def build_dashboard_summary() -> dict:
             "warning_stations": warning,
             "anomalous_stations": anomalous,
             "critical_alerts": critical,
-            "avg_trust_score": round(float(np.mean(trust_scores)) if trust_scores else 0.0, 2),
-            "avg_sensor_health": round(float(np.mean(health_scores)) if health_scores else 0.0, 2),
+            "avg_trust_score": round(sum(trust_scores) / len(trust_scores) if trust_scores else 0.0, 2),
+            "avg_sensor_health": round(sum(health_scores) / len(health_scores) if health_scores else 0.0, 2),
             "system_status": "Healthy" if critical == 0 else "Monitoring",
         }
     finally:
