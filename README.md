@@ -111,6 +111,8 @@ The repository includes a Render Blueprint and a multi-stage Dockerfile. The con
 
 The Blueprint's service name determines its default `https://skyguard-demo.onrender.com` CORS origin. If you rename the service or attach a custom domain, update `SKYGUARD_CORS_ORIGINS` in `render.yaml` to match the public site origin. Keep a single backend instance: the polling task is in-process and is not coordinated across multiple replicas. The free web tier may sleep between visits; polling pauses while asleep and resumes only when restarted from the dashboard. Check Render pricing, database retention, and Open-Meteo terms before sharing the deployment.
 
+Vercel deployments use the root `vercel.json`: Vercel builds `frontend/` as a static Vite SPA, preserves direct client-side routes, and proxies `/api/*` to `https://skyguard-demo.onrender.com`. Provision the Render Blueprint before relying on API-backed views. If Render assigns a different hostname, update the API rewrite destination in `vercel.json` and redeploy.
+
 ## API documentation
 
 After the backend starts, Swagger UI is available at:

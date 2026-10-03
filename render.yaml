@@ -14,7 +14,7 @@ services:
           name: skyguard-db
           property: connectionString
       - key: SKYGUARD_CORS_ORIGINS
-        value: https://skyguard-demo.onrender.com
+        value: https://sky-guard-pyxnlz3ch-zenvorous.vercel.app,https://skyguard-demo.onrender.com
       - key: SKYGUARD_POLL_INTERVAL_SECONDS
         value: "900"
 
