@@ -99,3 +99,27 @@ def test_deployed_frontend_routes_serve_spa_and_static_files(tmp_path, monkeypat
     assert client.get('/settings').text == '<!doctype html><div id="root"></div>'
     assert client.get('/assets/app.js').text == 'globalThis.skyguard = true;'
     assert client.get('/api/not-a-real-route').status_code == 404
+
+
+def test_vercel_monitoring_start_performs_one_on_demand_poll(monkeypatch):
+    monkeypatch.setenv('VERCEL', '1')
+    calls = []
+
+    async def poll_once():
+        calls.append(True)
+        from app.services.monitoring import live_weather_monitor
+        live_weather_monitor._status.update(last_error=None, last_inserted_count=2, last_success_at='2026-10-03T10:00:00+00:00')
+        return 2
+
+    monkeypatch.setattr('app.services.monitoring.live_weather_monitor.poll_on_demand', poll_once)
+
+    response = client.post('/api/monitoring/start')
+    status = client.get('/api/monitoring/status').json()
+
+    assert response.status_code == 200
+    assert response.json()['state'] == 'on-demand'
+    assert response.json()['inserted'] == 2
+    assert len(calls) == 1
+    assert status['active'] is False
+    assert status['poll_mode'] == 'on-demand'
+    assert status['storage_mode'] == 'ephemeral'

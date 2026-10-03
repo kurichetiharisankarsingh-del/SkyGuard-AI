@@ -1,0 +1,12 @@
+.git/
+.pytest_cache/
+backend/.venv/
+backend/skyguard.db
+skyguard.db
+backend/**/__pycache__/
+backend/tests/
+frontend/node_modules/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+frontend/build.log

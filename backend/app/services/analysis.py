@@ -4,10 +4,15 @@ import json
 import random
 from collections import defaultdict
 from datetime import datetime
-from statistics import median
+from math import asin, cos, radians, sin, sqrt
+from statistics import median, pstdev
 
-import numpy as np
-from sklearn.ensemble import IsolationForest
+try:
+    import numpy as np
+    from sklearn.ensemble import IsolationForest
+except ImportError:
+    np = None
+    IsolationForest = None
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -23,13 +28,11 @@ def _all_recent(db: Session, station_id: str, limit: int = 30):
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    from math import cos, radians, sin, sqrt
-
     r = 6371.0
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
     a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
-    return 2 * r * np.arcsin(np.sqrt(a))
+    return 2 * r * asin(sqrt(a))
 
 
 def validate_observation(db: Session, observation: RawObservation) -> tuple[str, list[dict]]:
@@ -51,7 +54,7 @@ def validate_observation(db: Session, observation: RawObservation) -> tuple[str,
 
     if history and len(history) >= 10:
         temps = [item.temperature for item in history]
-        if abs(observation.temperature - np.mean(temps)) > 2 * np.std(temps):
+        if abs(observation.temperature - sum(temps) / len(temps)) > 2 * pstdev(temps):
             issues.append({"status": "Warning", "parameter": "temperature", "type": "historical_variance", "reason": "Current temperature deviates significantly from rolling historical baseline."})
 
     if history and len(history) >= 20:
@@ -78,7 +81,7 @@ def spatial_consensus(db: Session, observation: RawObservation, radius_km: float
                 neighbors.append(latest.temperature)
     if not neighbors:
         return {"status": "Warning", "reason": "Insufficient nearby station data for spatial comparison.", "median": observation.temperature, "distance": 0}
-    median_temp = float(np.median(neighbors))
+    median_temp = float(median(neighbors))
     deviation = abs(observation.temperature - median_temp)
     if deviation > 8:
         return {"status": "Anomaly", "reason": "Current station deviates strongly from nearby stations.", "median": median_temp, "distance": deviation}
@@ -97,6 +100,19 @@ def ml_anomaly_score(db: Session, observation: RawObservation) -> dict:
     station_rows = db.query(RawObservation).filter(RawObservation.station_id == observation.station_id).order_by(RawObservation.timestamp.desc()).limit(120).all()
     if len(station_rows) < 12:
         return {"status": "Warning", "score": 0.25, "reason": "Insufficient training history for model-based anomaly inference."}
+
+    if np is None or IsolationForest is None:
+        temperatures = [row.temperature for row in station_rows]
+        center = median(temperatures)
+        mad = median([abs(value - center) for value in temperatures])
+        scale = 1.4826 * mad or max(pstdev(temperatures), 1.0)
+        deviation = abs(observation.temperature - center) / scale
+        status = "Anomaly" if deviation >= 3.5 else "Warning" if deviation >= 2.5 else "Normal"
+        return {
+            "status": status,
+            "score": round(deviation, 2),
+            "reason": "Robust rolling-statistics fallback used because the Isolation Forest runtime is unavailable.",
+        }
 
     features = []
     for row in station_rows:

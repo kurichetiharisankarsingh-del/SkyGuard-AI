@@ -99,19 +99,17 @@ This is near-real-time public weather data, not telemetry from physical AWS hard
 
 For local development, the frontend uses the Vite `/api` proxy by default. To call a separately hosted API directly, set `VITE_API_BASE_URL` to the API root including `/api`, for example `https://api.example.com/api`, before building the frontend. Configure backend browser origins as a comma-separated `SKYGUARD_CORS_ORIGINS` value. Set `DATABASE_URL` to a persistent PostgreSQL URL for hosted deployments; SQLite remains the local default. The poller is in-process, so deploy exactly one backend worker/instance for this demo.
 
-## Deploy to Render
+## Deploy to Vercel
 
-The repository includes a Render Blueprint and a multi-stage Dockerfile. The container builds the React app and serves it from FastAPI on the same origin, so the deployed frontend uses `/api` without a separate CORS or frontend API URL setting. The Blueprint creates one web instance and a PostgreSQL database; the web service health check is `/api/health`.
+Vercel runs the FastAPI app as a serverless function and builds the React app into assets served by that same app. The repository root is the Vercel project root; `pyproject.toml` points Vercel to `api/index.py` and `vercel.json` builds the frontend and bundles its output with the API.
 
-1. Push this repository to GitHub.
-2. In Render, create a new Blueprint and select this repository. Review the Blueprint before applying it; it provisions a Starter web service and a Basic PostgreSQL database, which may incur charges under Render's current pricing.
-3. Wait for the build and deployment to finish, then open the service URL ending in `onrender.com`.
-4. Verify `/api/health` reports `status: ok` and `database: postgresql`.
-5. Start Live Weather from the dashboard to begin Open-Meteo polling. The poll interval defaults to 15 minutes.
+1. Import this GitHub repository into Vercel, or use the existing `sky-guard-ai` project.
+2. Set the project Root Directory to the repository root (automatic detection), Framework Preset to FastAPI, install command to `pip install -r requirements.txt && npm --prefix frontend ci`, and build command to `npm --prefix frontend run build`.
+3. Deploy and verify `/api/health` and the app root.
 
-The Blueprint's service name determines its default `https://skyguard-demo.onrender.com` CORS origin. If you rename the service or attach a custom domain, update `SKYGUARD_CORS_ORIGINS` in `render.yaml` to match the public site origin. Keep a single backend instance: the polling task is in-process and is not coordinated across multiple replicas. The free web tier may sleep between visits; polling pauses while asleep and resumes only when restarted from the dashboard. Check Render pricing, database retention, and Open-Meteo terms before sharing the deployment.
+On Vercel, local SQLite uses `/tmp` and is ephemeral. For persistent records, create a Supabase Postgres project and add its transaction-pooler connection URL as the `DATABASE_URL` Production environment variable in Vercel, then redeploy. The URL is a secret; never commit it or paste it into chat. The backend converts `postgresql://` URLs to the psycopg driver automatically. Vercel's lean function bundle omits NumPy/scikit-learn and uses a robust rolling-statistics fallback for anomaly scoring; local installations continue to use Isolation Forest.
 
-Vercel deployments use the root `vercel.json`: Vercel builds `frontend/` as a static Vite SPA, preserves direct client-side routes, and proxies `/api/*` to `https://skyguard-demo.onrender.com`. Provision the Render Blueprint before relying on API-backed views. If Render assigns a different hostname, update the API rewrite destination in `vercel.json` and redeploy.
+The live-weather control performs one on-demand fetch per click; Vercel does not keep the in-process polling worker alive. Supabase makes records durable but does not turn Vercel into a continuously running monitor. Automated polling requires a scheduled Vercel Cron endpoint and an authorized cron secret, or a persistent worker service. Open-Meteo observations are public weather data, not physical AWS telemetry. Review Vercel/Supabase plan limits and Open-Meteo terms before sharing the app.
 
 ## API documentation
 

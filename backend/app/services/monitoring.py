@@ -129,6 +129,11 @@ class LiveWeatherMonitor:
             if db is not None:
                 db.close()
 
+    async def poll_on_demand(self) -> int:
+        inserted = await self.poll_once()
+        self._status.update(active=False, state="on-demand")
+        return inserted
+
     async def _run(self) -> None:
         try:
             while self._status["active"]:

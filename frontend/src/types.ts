@@ -49,12 +49,14 @@ export type Observation = {
 
 export type MonitoringStatus = {
   active: boolean;
-  state: 'running' | 'paused' | 'stopped';
+  state: 'running' | 'paused' | 'stopped' | 'on-demand';
   source: string;
   interval_seconds: number;
   last_success_at: string | null;
   last_error: string | null;
   last_inserted_count: number;
+  poll_mode?: 'background' | 'on-demand';
+  storage_mode?: 'ephemeral' | 'persistent';
 };
 
 export type Analytics = {

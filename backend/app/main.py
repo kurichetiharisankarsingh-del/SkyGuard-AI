@@ -58,7 +58,8 @@ def format_provider_timestamp(timestamp: datetime | None) -> str | None:
 def startup_event() -> None:
     init_db()
     generate_initial_seed_data()
-    analyze_all_stations()
+    if not os.getenv("VERCEL"):
+        analyze_all_stations()
     set_monitoring_state(False, POLL_INTERVAL_SECONDS)
 
 
@@ -291,6 +292,18 @@ def reset_named_scenario() -> dict[str, Any]:
 
 @app.post("/api/monitoring/start")
 async def monitoring_start() -> dict[str, Any]:
+    if os.getenv("VERCEL"):
+        inserted = await live_weather_monitor.poll_on_demand()
+        set_monitoring_state(False, POLL_INTERVAL_SECONDS)
+        if live_weather_monitor.status()["last_error"]:
+            raise HTTPException(status_code=502, detail=live_weather_monitor.status()["last_error"])
+        return {
+            "status": "ok",
+            "active": False,
+            "state": "on-demand",
+            "inserted": inserted,
+            "message": "Weather updated once. Vercel functions cannot keep a polling worker alive.",
+        }
     set_monitoring_state(True, POLL_INTERVAL_SECONDS)
     await live_weather_monitor.start()
     return {"status": "ok", "active": True, "message": "Live Open-Meteo polling started."}
@@ -314,7 +327,13 @@ async def monitoring_stop() -> dict[str, Any]:
 def monitoring_status() -> dict[str, Any]:
     persisted = get_monitoring_state()
     runtime = live_weather_monitor.status()
-    return {**persisted, **runtime, "last_update": persisted["last_update"]}
+    return {
+        **persisted,
+        **runtime,
+        "last_update": persisted["last_update"],
+        "poll_mode": "on-demand" if os.getenv("VERCEL") else "background",
+        "storage_mode": "ephemeral" if os.getenv("VERCEL") and engine.dialect.name == "sqlite" else "persistent",
+    }
 
 
 @app.post("/api/model/retrain")

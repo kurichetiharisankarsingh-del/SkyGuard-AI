@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 from app.models import RawObservation, Station
+from app.services import analysis
 from app.services import monitoring
 from app.services.weather_provider import ProviderObservation
 from app.services.monitoring import LiveWeatherMonitor
@@ -138,3 +139,36 @@ def test_monitor_pause_cancels_polling_task():
     asyncio.run(exercise_lifecycle())
     assert monitor.status()["active"] is False
     assert monitor.status()["state"] == "paused"
+
+
+def test_statistical_anomaly_fallback_without_ml_dependencies(monkeypatch):
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    for index in range(12):
+        db.add(RawObservation(
+            station_id="AWS-001",
+            temperature=22 + index * 0.1,
+            pressure=1010,
+            humidity=55,
+            latitude=28.6,
+            longitude=77.2,
+        ))
+    db.commit()
+    observation = RawObservation(
+        station_id="AWS-001",
+        temperature=48,
+        pressure=1010,
+        humidity=55,
+        latitude=28.6,
+        longitude=77.2,
+    )
+    monkeypatch.setattr(analysis, "np", None)
+    monkeypatch.setattr(analysis, "IsolationForest", None)
+
+    result = analysis.ml_anomaly_score(db, observation)
+
+    assert result["status"] == "Anomaly"
+    assert "fallback" in result["reason"]
+    db.close()
+    engine.dispose()

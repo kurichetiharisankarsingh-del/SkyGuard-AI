@@ -3,7 +3,8 @@ import os
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./skyguard.db")
+default_database_url = "sqlite:////tmp/skyguard.db" if os.getenv("VERCEL") and os.name != "nt" else "sqlite:///./skyguard.db"
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", default_database_url)
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 elif SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):

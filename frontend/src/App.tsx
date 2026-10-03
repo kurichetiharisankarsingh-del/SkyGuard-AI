@@ -80,6 +80,8 @@ function Sidebar() {
   const { pathname } = useLocation();
   const { status, error, refresh } = useMonitoringStatus();
   const [busy, setBusy] = useState(false);
+  const isOnDemand = status?.poll_mode === 'on-demand';
+  const showingLiveData = status?.active === true || status?.state === 'on-demand';
 
   const controlMonitoring = async (action: 'start' | 'pause' | 'stop') => {
     setBusy(true);
@@ -117,17 +119,19 @@ function Sidebar() {
       </nav>
 
       <div className="monitoring-panel">
-        <span className={`live-dot ${status?.active ? 'is-live' : 'is-demo'}`} />
+        <span className={`live-dot ${showingLiveData ? 'is-live' : 'is-demo'}`} />
         <div>
-          <strong>{status?.active ? 'Live weather' : 'Demo data'}</strong>
-          <p>{status?.active ? 'Open-Meteo provider' : 'Scenario simulator'}</p>
+          <strong>{showingLiveData ? 'Live weather' : 'Demo data'}</strong>
+          <p>{isOnDemand ? 'One-shot fetch • Vercel' : showingLiveData ? 'Open-Meteo provider' : 'Scenario simulator'}</p>
           {status?.last_success_at && <small>Fetched {new Date(status.last_success_at).toLocaleTimeString()}</small>}
           {(status?.last_error || error) && <small className="monitor-error">{status?.last_error || 'API status unavailable'}</small>}
         </div>
         <div className="monitoring-controls">
-          <button title="Start live weather polling" aria-label="Start live weather polling" disabled={busy || status?.active} onClick={() => void controlMonitoring('start')}><Play size={14} /></button>
-          <button title="Pause live weather polling" aria-label="Pause live weather polling" disabled={busy || !status?.active} onClick={() => void controlMonitoring('pause')}><Pause size={14} /></button>
-          <button title="Stop live weather polling" aria-label="Stop live weather polling" disabled={busy || (!status?.active && status?.state === 'stopped')} onClick={() => void controlMonitoring('stop')}><Square size={13} /></button>
+          <button title={isOnDemand ? 'Fetch current weather once' : 'Start live weather polling'} aria-label={isOnDemand ? 'Fetch current weather once' : 'Start live weather polling'} disabled={busy || status?.active} onClick={() => void controlMonitoring('start')}>{isOnDemand ? <RefreshCw size={14} /> : <Play size={14} />}</button>
+          {!isOnDemand && <>
+            <button title="Pause live weather polling" aria-label="Pause live weather polling" disabled={busy || !status?.active} onClick={() => void controlMonitoring('pause')}><Pause size={14} /></button>
+            <button title="Stop live weather polling" aria-label="Stop live weather polling" disabled={busy || (!status?.active && status?.state === 'stopped')} onClick={() => void controlMonitoring('stop')}><Square size={13} /></button>
+          </>}
         </div>
       </div>
     </aside>
@@ -181,6 +185,7 @@ function DashboardPage() {
   }, [monitoringStatus?.active]);
 
   const summary = analytics?.summary;
+  const showingLiveData = monitoringStatus?.active === true || monitoringStatus?.state === 'on-demand';
 
   return (
     <div className="page">
@@ -190,7 +195,7 @@ function DashboardPage() {
           <h2>SkyGuard AI Overview</h2>
         </div>
         <div className="header-status">
-          {monitoringStatus?.active ? `Open-Meteo live • fetched ${monitoringStatus.last_success_at ? new Date(monitoringStatus.last_success_at).toLocaleTimeString() : 'waiting'}` : 'Scenario simulator • demo data'}
+          {showingLiveData ? `Open-Meteo • ${monitoringStatus?.poll_mode === 'on-demand' ? 'on-demand fetch' : 'live polling'} • fetched ${monitoringStatus?.last_success_at ? new Date(monitoringStatus.last_success_at).toLocaleTimeString() : 'waiting'}` : 'Scenario simulator • demo data'}
         </div>
       </header>
 
@@ -213,7 +218,7 @@ function DashboardPage() {
             <SummaryCard title="Anomalous Stations" value={summary?.anomalous_stations ?? 0} tone="#ef4444" />
             <SummaryCard title="Critical Alerts" value={summary?.critical_alerts ?? 0} tone="#dc2626" />
             <SummaryCard title="Avg Trust Score" value={`${summary?.avg_trust_score ?? 0}`} tone="#0ea5e9" />
-            {!monitoringStatus?.active && <SummaryCard title="Avg Sensor Health (demo)" value={`${summary?.avg_sensor_health ?? 0}`} tone="#10b981" />}
+            {!showingLiveData && <SummaryCard title="Avg Sensor Health (demo)" value={`${summary?.avg_sensor_health ?? 0}`} tone="#10b981" />}
           </section>
 
           <section className="dashboard-grid">
@@ -252,7 +257,7 @@ function DashboardPage() {
               <div className="panel-header">
                 <h3>Current station readings</h3>
               </div>
-              {monitoringStatus?.active && <p className="muted provider-note">Weather API observations, not physical sensor telemetry.</p>}
+              {showingLiveData && <p className="muted provider-note">Weather API observations, not physical sensor telemetry. Vercel stores demo data temporarily.</p>}
               <div className="station-list">
                 {stations.map((station) => (
                   <div key={station.station_id} className="station-row">
@@ -751,7 +756,7 @@ function SettingsPage() {
         </article>
         <article className="system-metric">
           <span className="system-icon"><Database size={18} /></span>
-          <div><span className="metric-label">Database</span><strong>{service?.database ? service.database.toUpperCase() : 'Unknown'}</strong><small>{service?.database === 'sqlite' ? 'Local file storage' : 'Configured backend storage'}</small></div>
+          <div><span className="metric-label">Database</span><strong>{service?.database ? service.database.toUpperCase() : 'Unknown'}</strong><small>{monitoringStatus?.storage_mode === 'ephemeral' ? 'Temporary serverless storage' : service?.database === 'sqlite' ? 'Local file storage' : 'Configured backend storage'}</small></div>
           <span className="system-state state-neutral"><CheckCircle2 size={15} /></span>
         </article>
       </section>
@@ -759,7 +764,7 @@ function SettingsPage() {
       <section className="operations-layout">
         <div className="operation-section">
           <div className="section-heading"><div><p className="eyebrow">Ingestion</p><h3>Live weather polling</h3></div><span className={`status-badge ${monitoringStatus?.active ? 'badge-live' : ''}`}>{monitoringStatus?.state || 'Loading'}</span></div>
-          <p className="section-copy">Current conditions are retrieved for the configured station coordinates. Provider refresh cadence may be slower than the polling interval.</p>
+          <p className="section-copy">{monitoringStatus?.poll_mode === 'on-demand' ? 'Each request fetches current conditions once. Vercel functions do not keep background workers running.' : 'Current conditions are retrieved for the configured station coordinates. Provider refresh cadence may be slower than the polling interval.'}</p>
           <dl className="definition-list">
             <div><dt>Provider</dt><dd>{monitoringStatus?.source || 'Open-Meteo'}</dd></div>
             <div><dt>Poll interval</dt><dd>{monitoringStatus ? `${Math.round(monitoringStatus.interval_seconds / 60)} minutes` : 'Loading'}</dd></div>
@@ -767,9 +772,13 @@ function SettingsPage() {
             <div><dt>New observations</dt><dd>{monitoringStatus?.last_inserted_count ?? 0} on last poll</dd></div>
           </dl>
           <div className="button-row operation-actions">
-            <button className="primary-btn" disabled={busy || monitoringStatus?.active} onClick={() => void setMonitoring('start')}><Play size={15} /> Start polling</button>
-            <button className="secondary-btn" disabled={busy || !monitoringStatus?.active} onClick={() => void setMonitoring('pause')}><Pause size={15} /> Pause</button>
-            <button className="secondary-btn" disabled={busy || (!monitoringStatus?.active && monitoringStatus?.state === 'stopped')} onClick={() => void setMonitoring('stop')}><Square size={14} /> Stop</button>
+            {monitoringStatus?.poll_mode === 'on-demand' ? (
+              <button className="primary-btn" disabled={busy} onClick={() => void setMonitoring('start')}><RefreshCw size={15} /> Fetch weather now</button>
+            ) : <>
+              <button className="primary-btn" disabled={busy || monitoringStatus?.active} onClick={() => void setMonitoring('start')}><Play size={15} /> Start polling</button>
+              <button className="secondary-btn" disabled={busy || !monitoringStatus?.active} onClick={() => void setMonitoring('pause')}><Pause size={15} /> Pause</button>
+              <button className="secondary-btn" disabled={busy || (!monitoringStatus?.active && monitoringStatus?.state === 'stopped')} onClick={() => void setMonitoring('stop')}><Square size={14} /> Stop</button>
+            </>}
           </div>
         </div>
 
@@ -785,7 +794,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      <p className="data-disclaimer">Open-Meteo observations represent public weather data, not measurements from physical AWS sensors. Data-quality scores are model-derived and do not establish hardware health.</p>
+      <p className="data-disclaimer">Open-Meteo observations represent public weather data, not measurements from physical AWS sensors. Data-quality scores are model-derived and do not establish hardware health.{monitoringStatus?.storage_mode === 'ephemeral' ? ' Vercel demo data is temporary and may reset between function instances.' : ''}</p>
     </div>
   );
 }
